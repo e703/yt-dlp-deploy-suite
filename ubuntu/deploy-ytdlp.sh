@@ -44,8 +44,11 @@ warn()  { echo -e "    \033[1;33mWARNING: $*\033[0m"; }
 
 # ---------------------------------------------------------------- 1. apt 依赖
 step "1/7 安装 apt 包（ffmpeg、python3-venv、curl）"
-if command -v ffmpeg >/dev/null && command -v python3 >/dev/null; then
-    info "ffmpeg/python3 已存在"
+# 注意：不能只查 ffmpeg/python3 是否存在——python3-venv 缺失时 venv 创建会在第 2 步失败
+# （Debian/Ubuntu 把 ensurepip 拆进 python3-venv 包），所以这里要验证 venv 真正可用
+if command -v ffmpeg >/dev/null && command -v python3 >/dev/null \
+   && python3 -c "import ensurepip" >/dev/null 2>&1; then
+    info "ffmpeg/python3/python3-venv 已存在"
 else
     sudo apt-get update -y
     sudo apt-get install -y ffmpeg python3 python3-venv python3-pip curl ca-certificates
