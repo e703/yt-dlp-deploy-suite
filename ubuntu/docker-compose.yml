@@ -1,0 +1,8 @@
+services:
+  bgutil-ytdlp-pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: bgutil-pot
+    restart: unless-stopped
+    # bind to loopback only: the server is a local helper for yt-dlp, not a public service
+    ports:
+      - "127.0.0.1:4416:4416"

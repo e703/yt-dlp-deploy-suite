@@ -1,0 +1,13 @@
+# OS / editor junk
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Never commit cookies or credentials
+cookies.txt
+*.cookies
+.env
+
+# Logs / temp
+*.log
+/tmp/
