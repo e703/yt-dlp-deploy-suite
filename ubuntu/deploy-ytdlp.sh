@@ -42,6 +42,16 @@ ok()    { echo -e "    \033[1;32mOK: $*\033[0m"; }
 info()  { echo -e "    \033[2m-- $*\033[0m"; }
 warn()  { echo -e "    \033[1;33mWARNING: $*\033[0m"; }
 
+# 预检：HOME 必须当前用户可写。两种常见翻车场景在这里直接拦下并给出人话指引：
+#   ① 用 sudo 跑本脚本（HOME 变成 root 的，或产物属主变 root，后续步骤必挂）；
+#   ② ~/.config 曾被 sudo 运行搞成 root 属主。
+if [[ ! -w "$HOME" ]] || { [[ -d "$HOME/.config" ]] && [[ ! -w "$HOME/.config" ]]; }; then
+    echo "错误：HOME ($HOME) 或 ~/.config 当前用户不可写。"
+    echo "  - 请不要用 sudo 运行本脚本，直接用你的普通用户执行；"
+    echo "  - 若属主异常，修复: sudo chown -R \$(id -u):\$(id -g) ~/.config"
+    exit 1
+fi
+
 # ---------------------------------------------------------------- 1. apt 依赖
 step "1/7 安装 apt 包（ffmpeg、python3-venv、curl）"
 # 注意：不能只查 ffmpeg/python3 是否存在——python3-venv 缺失时 venv 创建会在第 2 步失败
