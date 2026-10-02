@@ -101,6 +101,25 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
 fi
 ok "yt-dlp $("$BIN_DIR/yt-dlp" --version)"
 
+# ---------------------------------------------------------------- 2b. deno（EJS n-challenge 求解必需）
+# 容易漏算的一点：deno 不只是本地版 bgutil 的运行时——yt-dlp 自身的 EJS 挑战求解
+# （n-challenge / 签名解算）同样依赖 JS 运行时，缺了它会报
+# "n challenge solving failed" + "The page needs to be reloaded"，
+# 与 PO Token 层是否走 Docker 无关，宿主机必须装。
+step "2b/7 安装 deno（yt-dlp EJS 挑战求解必需）"
+DENO_BIN="$HOME/.deno/bin/deno"
+if [[ -x "$DENO_BIN" ]] || command -v deno >/dev/null; then
+    info "deno 已安装"
+else
+    # 官方安装器自带架构探测（x86_64/aarch64），并自动写入 shell rc 的 PATH
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y
+fi
+# zsh 不读 ~/.profile，保险起见把 deno 目录写进 zshrc（存在才写）
+if [[ -f "$HOME/.zshrc" ]] && ! grep -qs ".deno/bin" "$HOME/.zshrc"; then
+    echo 'export PATH="$HOME/.deno/bin:$PATH"' >> "$HOME/.zshrc"
+fi
+ok "$("$DENO_BIN" --version 2>/dev/null | head -1 || deno --version | head -1)"
+
 # ---------------------------------------------------------------- 3. 全局配置
 step "3/7 写 ~/.config/yt-dlp/config"
 CFG_DIR="$HOME/.config/yt-dlp"
