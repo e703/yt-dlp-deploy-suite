@@ -42,6 +42,17 @@ ok()    { echo -e "    \033[1;32mOK: $*\033[0m"; }
 info()  { echo -e "    \033[2m-- $*\033[0m"; }
 warn()  { echo -e "    \033[1;33mWARNING: $*\033[0m"; }
 
+# 带路径报错的 mkdir：set -e 下裸 mkdir 失败会静默退出且不带路径，
+# 排障时完全猜不到挂在哪个目录（真实教训：-o /data/downloads 挂在 root 属主的 /data）
+mk_dir() {
+    mk_dir "$1" || {
+        echo "错误：无法创建目录 $1" >&2
+        echo "  - 检查该路径的属主与权限；系统目录请先 sudo mkdir 并 chown 给当前用户；" >&2
+        echo "  - 或改用 -o 指定一个当前用户可写的目录。" >&2
+        exit 1
+    }
+}
+
 # 预检：HOME 必须当前用户可写。两种常见翻车场景在这里直接拦下并给出人话指引：
 #   ① 用 sudo 跑本脚本（HOME 变成 root 的，或产物属主变 root，后续步骤必挂）；
 #   ② ~/.config 曾被 sudo 运行搞成 root 属主。
@@ -75,7 +86,7 @@ ok "apt 包就绪"
 step "2/7 在独立 venv 中安装 yt-dlp nightly（规避 PEP 668 系统限制）"
 VENV="$HOME/.local/yt-dlp-venv"
 BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
+mk_dir "$BIN_DIR"
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q -U pip
 # --pre 拉取 nightly 预发布版——稳定版对 YouTube 改版滞后 1-3 周，是 403 的头号来源
@@ -93,9 +104,9 @@ ok "yt-dlp $("$BIN_DIR/yt-dlp" --version)"
 # ---------------------------------------------------------------- 3. 全局配置
 step "3/7 写 ~/.config/yt-dlp/config"
 CFG_DIR="$HOME/.config/yt-dlp"
-mkdir -p "$CFG_DIR"
+mk_dir "$CFG_DIR"
 OUT_NORM="${OUTPUT_DIR/#\~/$HOME}"
-mkdir -p "$OUT_NORM"
+mk_dir "$OUT_NORM"
 # 注意：配置文件内容必须保持 ASCII——yt-dlp 按系统代码页读取配置，非 ASCII 会解析失败
 cat > "$CFG_DIR/config" <<EOF
 -P $OUT_NORM
@@ -142,7 +153,7 @@ if [[ $SKIP_POT -eq 0 ]]; then
 
     # 5a. 插件 zip 装在宿主机（yt-dlp 经 HTTP 与容器通信，容器不含插件）
     PLUG_DIR="$CFG_DIR/plugins"
-    mkdir -p "$PLUG_DIR"
+    mk_dir "$PLUG_DIR"
     PLUG_ZIP="$PLUG_DIR/bgutil-ytdlp-pot-provider.zip"
     if [[ -f "$PLUG_ZIP" ]]; then
         info "插件 zip 已存在"
@@ -152,7 +163,7 @@ if [[ $SKIP_POT -eq 0 ]]; then
     fi
 
     # 5b. compose 文件（端口仅绑 127.0.0.1——本地辅助服务，不对局域网暴露）
-    mkdir -p "$COMPOSE_DIR"
+    mk_dir "$COMPOSE_DIR"
     cat > "$COMPOSE_DIR/docker-compose.yml" <<'EOF'
 services:
   bgutil-ytdlp-pot-provider:
