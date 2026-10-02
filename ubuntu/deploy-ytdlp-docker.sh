@@ -229,11 +229,16 @@ fi
 step "7/7 创建 'yt' 包装命令"
 cat > "$BIN_DIR/yt" <<EOF
 #!/usr/bin/env bash
-# yt - yt-dlp 包装命令：PO Token 服务器（docker）未监听时自动拉起
+# yt - yt-dlp 包装命令
+YTDLP="\$(command -v yt-dlp)" || { echo "yt-dlp not found in PATH" >&2; exit 1; }
+EOF
+
+# 只有真正部署了 PO Token 服务器时，才写入"自动拉起容器"的逻辑；
+# 否则 --skip-pot 用户每次下载都要白等一轮 docker compose 与 60s 轮询
+if [[ $SKIP_POT -eq 0 ]]; then
+cat >> "$BIN_DIR/yt" <<EOF
 POT_URL="http://127.0.0.1:4416/ping"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yml"
-YTDLP="\$(command -v yt-dlp)" || { echo "yt-dlp not found in PATH" >&2; exit 1; }
-
 pot_ok() { curl -sf --max-time 2 "\$POT_URL" >/dev/null 2>&1; }
 
 dc() {
@@ -255,6 +260,10 @@ if ! pot_ok; then
     if pot_ok; then echo "[yt] PO Token 服务器就绪。"
     else echo "[yt] WARNING: 等待 60s 仍未就绪，继续执行" >&2; fi
 fi
+EOF
+fi
+
+cat >> "$BIN_DIR/yt" <<EOF
 
 # exec + "\$@" 原样透传参数，无字符串拼接执行，规避注入面
 exec "\$YTDLP" "\$@"
