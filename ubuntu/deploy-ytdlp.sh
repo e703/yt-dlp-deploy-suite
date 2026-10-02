@@ -132,20 +132,19 @@ else
     warn "请在有浏览器的机器上用 'Get cookies.txt LOCALLY' 扩展导出后放过来——没有它，机房 IP 下载必 403"
 fi
 
-# ---------------------------------------------------------------- 4. deno
-if [[ $SKIP_POT -eq 1 ]]; then
-    step "4/7 跳过 PO Token 层（--skip-pot）"
-    DENO_BIN=""
+# ---------------------------------------------------------------- 4. deno（EJS 挑战求解必需，与 PO Token 层无关）
+# 不能放进 --skip-pot 分支：即使不部署 bgutil，yt-dlp 自身的 n-challenge /
+# 签名解算同样需要 JS 运行时，缺了会报 "n challenge solving failed" +
+# "The page needs to be reloaded"
+step "4/7 安装 deno（yt-dlp EJS 挑战求解必需）"
+DENO_BIN="$HOME/.deno/bin/deno"
+if [[ -x "$DENO_BIN" ]] || command -v deno >/dev/null; then
+    info "deno 已安装"
 else
-    step "4/7 安装 deno"
-    DENO_BIN="$HOME/.deno/bin/deno"
-    if [[ -x "$DENO_BIN" ]]; then
-        info "deno 已安装"
-    else
-        curl -fsSL https://deno.land/install.sh | sh -s -- -y
-    fi
-    ok "$("$DENO_BIN" --version | head -1)"
+    # deno 官方安装器解压需要 unzip（极简系统常缺，已在 apt 步骤补齐）
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y
 fi
+ok "$("$DENO_BIN" --version 2>/dev/null | head -1 || deno --version | head -1)"
 
 # ---------------------------------------------------------------- 5+6. bgutil 服务器（本地）
 if [[ $SKIP_POT -eq 0 ]]; then
@@ -159,7 +158,7 @@ if [[ $SKIP_POT -eq 0 ]]; then
         TMPD="$(mktemp -d)"
         curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/$BGUTIL_VER.tar.gz" -o "$TMPD/repo.tar.gz"
         tar -xzf "$TMPD/repo.tar.gz" -C "$TMPD"
-        mkdir -p "$SERVER_ROOT"
+        mk_dir "$SERVER_ROOT"
         mv "$TMPD/bgutil-ytdlp-pot-provider-$BGUTIL_VER/server" "$SERVER_DIR"
         rm -rf "$TMPD"
         ok "服务器源码 -> $SERVER_DIR"
@@ -167,7 +166,7 @@ if [[ $SKIP_POT -eq 0 ]]; then
 
     # 插件（zip）-> ~/.config/yt-dlp/plugins/（yt-dlp 支持直接加载 zip 插件）
     PLUG_DIR="$CFG_DIR/plugins"
-    mkdir -p "$PLUG_DIR"
+    mk_dir "$PLUG_DIR"
     PLUG_ZIP="$PLUG_DIR/bgutil-ytdlp-pot-provider.zip"
     if [[ -f "$PLUG_ZIP" ]]; then
         info "插件 zip 已存在"
@@ -195,7 +194,7 @@ fi
 if [[ $SKIP_POT -eq 0 ]]; then
     step "6/7 创建 systemd 用户服务（开机自启 + 崩溃自动重启）"
     SYSTEMD_DIR="$HOME/.config/systemd/user"
-    mkdir -p "$SYSTEMD_DIR"
+    mk_dir "$SYSTEMD_DIR"
     cat > "$SYSTEMD_DIR/bgutil-pot.service" <<EOF
 [Unit]
 Description=bgutil yt-dlp PO Token provider server (port 4416)

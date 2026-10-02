@@ -49,6 +49,17 @@ ok()    { echo -e "    \033[1;32mOK: $*\033[0m"; }
 info()  { echo -e "    \033[2m-- $*\033[0m"; }
 warn()  { echo -e "    \033[1;33mWARNING: $*\033[0m"; }
 
+# 带路径报错的 mkdir：set -e 下裸 mkdir 失败会静默退出且不带路径，
+# 排障时完全猜不到挂在哪个目录（真实教训：-o /data/downloads 挂在 root 属主的 /data）
+mk_dir() {
+    mkdir -p "$1" || {
+        echo "错误：无法创建目录 $1" >&2
+        echo "  - 检查该路径的属主与权限；系统目录请先 sudo mkdir 并 chown 给当前用户；" >&2
+        echo "  - 或改用 -o 指定一个当前用户可写的目录。" >&2
+        exit 1
+    }
+}
+
 echo "Detected: macOS $MAC_MAJOR on $ARCH"
 
 # ---------------------------------------------------------------- 1. 前置依赖
@@ -69,7 +80,7 @@ ok "python3 $(python3 --version | cut -d' ' -f2)"
 step "2/7 在独立 venv 中安装 yt-dlp nightly"
 VENV="$HOME/.local/yt-dlp-venv"
 BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
+mk_dir "$BIN_DIR"
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q -U pip
 # --pre 拉取 nightly 预发布版——稳定版对 YouTube 改版滞后 1-3 周，是 403 的头号来源
@@ -115,8 +126,8 @@ fi
 # ---------------------------------------------------------------- 4. 全局配置
 step "4/7 写 ~/.config/yt-dlp/config"
 CFG_DIR="$HOME/.config/yt-dlp"
-mkdir -p "$CFG_DIR"
-mkdir -p "$OUTPUT_DIR"
+mk_dir "$CFG_DIR"
+mk_dir "$OUTPUT_DIR"
 # 注意：配置文件内容必须保持 ASCII——yt-dlp 按系统代码页读取配置，非 ASCII 会解析失败
 {
     echo "-P $OUTPUT_DIR"
@@ -135,20 +146,24 @@ mkdir -p "$OUTPUT_DIR"
 } > "$CFG_DIR/config"
 ok "配置已写入（输出目录=$OUTPUT_DIR, cookies=$BROWSER）"
 
-# ---------------------------------------------------------------- 5. deno + bgutil
-if [[ $SKIP_POT -eq 1 ]]; then
-    step "5/7 跳过 PO Token 层（--skip-pot）"
-    DENO_BIN=""
+# ---------------------------------------------------------------- 5. deno（EJS 挑战求解必需，与 PO Token 层无关）
+# 不能放进 --skip-pot 分支：即使不部署 bgutil，yt-dlp 自身的 n-challenge /
+# 签名解算同样需要 JS 运行时，缺了会报 "n challenge solving failed" +
+# "The page needs to be reloaded"
+step "5/7 安装 deno（yt-dlp EJS 挑战求解必需）"
+DENO_BIN="$HOME/.deno/bin/deno"
+if [[ -x "$DENO_BIN" ]] || command -v deno >/dev/null; then
+    info "deno 已安装"
 else
-    step "5/7 安装 deno + bgutil PO Token provider v$BGUTIL_VER"
-    DENO_BIN="$HOME/.deno/bin/deno"
-    if [[ -x "$DENO_BIN" ]]; then
-        info "deno 已安装"
-    else
-        # 官方安装器自动匹配 arm64/x86_64 构建版本
-        curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null
-    fi
-    ok "$("$DENO_BIN" --version | head -1)"
+    # 官方安装器自动匹配 arm64/x86_64 构建版本
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null
+fi
+ok "$("$DENO_BIN" --version 2>/dev/null | head -1 || deno --version | head -1)"
+
+if [[ $SKIP_POT -eq 1 ]]; then
+    step "5b/7 跳过 bgutil PO Token 层（--skip-pot）"
+else
+    step "5b/7 部署 bgutil PO Token provider v$BGUTIL_VER"
 
     SERVER_DIR="$HOME/bgutil-ytdlp-pot-provider/server"
     if [[ -f "$SERVER_DIR/src/main.ts" ]]; then
@@ -157,14 +172,14 @@ else
         TMPD="$(mktemp -d)"
         curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/$BGUTIL_VER.tar.gz" -o "$TMPD/repo.tar.gz"
         tar -xzf "$TMPD/repo.tar.gz" -C "$TMPD"
-        mkdir -p "$(dirname "$SERVER_DIR")"
+        mk_dir "$(dirname "$SERVER_DIR")"
         mv "$TMPD/bgutil-ytdlp-pot-provider-$BGUTIL_VER/server" "$SERVER_DIR"
         rm -rf "$TMPD"
         ok "服务器源码 -> $SERVER_DIR"
     fi
 
     PLUG_DIR="$CFG_DIR/plugins"
-    mkdir -p "$PLUG_DIR"
+    mk_dir "$PLUG_DIR"
     PLUG_ZIP="$PLUG_DIR/bgutil-ytdlp-pot-provider.zip"
     if [[ -f "$PLUG_ZIP" ]]; then
         info "插件 zip 已存在"
@@ -188,7 +203,7 @@ fi
 if [[ $SKIP_POT -eq 0 ]]; then
     step "6/7 创建 launchd LaunchAgent（开机自启 + 崩溃自动拉起）"
     PLIST="$HOME/Library/LaunchAgents/com.bgutil.pot.plist"
-    mkdir -p "$HOME/Library/LaunchAgents"
+    mk_dir "$HOME/Library/LaunchAgents"
     # RunAtLoad=登录时启动；KeepAlive=进程退出即重启（等效 systemd Restart=always）
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
