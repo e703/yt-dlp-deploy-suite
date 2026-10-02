@@ -83,11 +83,17 @@ step "2/7 在独立 venv 中安装 yt-dlp nightly（规避 PEP 668 系统限制�
 VENV="$HOME/.local/yt-dlp-venv"
 BIN_DIR="$HOME/.local/bin"
 mk_dir "$BIN_DIR"
-python3 -m venv "$VENV"
-"$VENV/bin/pip" install -q -U pip
-# --pre 拉取 nightly 预发布版——稳定版对 YouTube 改版滞后 1-3 周，是 403 的头号来源
-"$VENV/bin/pip" install -q -U --pre "yt-dlp[default]"
-ln -sf "$VENV/bin/yt-dlp" "$BIN_DIR/yt-dlp"
+# 幂等：yt-dlp 已可用就不再重建 venv——重建既浪费时间，也会在环境异常时
+#（如个别发行版 python3.14 崩溃）把"重跑脚本"变成"重蹈覆辙"
+if "$BIN_DIR/yt-dlp" --version >/dev/null 2>&1; then
+    info "yt-dlp 已安装，跳过 venv 重建（要强制重装: rm -rf $VENV）"
+else
+    python3 -m venv "$VENV"
+    "$VENV/bin/pip" install -q -U pip
+    # --pre 拉取 nightly 预发布版——稳定版对 YouTube 改版滞后 1-3 周，是 403 的头号来源
+    "$VENV/bin/pip" install -q -U --pre "yt-dlp[default]"
+    ln -sf "$VENV/bin/yt-dlp" "$BIN_DIR/yt-dlp"
+fi
 
 # 确保 ~/.local/bin 在 PATH 中（登录 shell 生效）
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
