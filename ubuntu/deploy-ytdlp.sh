@@ -66,13 +66,15 @@ fi
 # ---------------------------------------------------------------- 1. apt 依赖
 step "1/7 安装 apt 包（ffmpeg、python3-venv、curl）"
 # 注意：不能只查 ffmpeg/python3 是否存在——python3-venv 缺失时 venv 创建会在第 2 步失败
-# （Debian/Ubuntu 把 ensurepip 拆进 python3-venv 包），所以这里要验证 venv 真正可用
+# （Debian/Ubuntu 把 ensurepip 拆进 python3-venv 包），所以这里要验证 venv 真正可用；
+# unzip 是 deno 官方安装器的硬依赖（缺了会在 deno 步报 "either unzip or 7z is required"）
 if command -v ffmpeg >/dev/null && command -v python3 >/dev/null \
+   && command -v unzip >/dev/null \
    && python3 -c "import ensurepip" >/dev/null 2>&1; then
-    info "ffmpeg/python3/python3-venv 已存在"
+    info "ffmpeg/python3/python3-venv/unzip 已存在"
 else
     sudo apt-get update -y
-    sudo apt-get install -y ffmpeg python3 python3-venv python3-pip curl ca-certificates
+    sudo apt-get install -y ffmpeg python3 python3-venv python3-pip curl ca-certificates unzip
 fi
 ok "apt 包就绪"
 
