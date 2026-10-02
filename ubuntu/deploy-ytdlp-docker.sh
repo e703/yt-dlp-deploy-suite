@@ -45,7 +45,7 @@ warn()  { echo -e "    \033[1;33mWARNING: $*\033[0m"; }
 # 带路径报错的 mkdir：set -e 下裸 mkdir 失败会静默退出且不带路径，
 # 排障时完全猜不到挂在哪个目录（真实教训：-o /data/downloads 挂在 root 属主的 /data）
 mk_dir() {
-    mk_dir "$1" || {
+    mkdir -p "$1" || {
         echo "错误：无法创建目录 $1" >&2
         echo "  - 检查该路径的属主与权限；系统目录请先 sudo mkdir 并 chown 给当前用户；" >&2
         echo "  - 或改用 -o 指定一个当前用户可写的目录。" >&2
