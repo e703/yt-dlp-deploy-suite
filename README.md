@@ -107,7 +107,12 @@ powershell -ExecutionPolicy Bypass -File windows\deploy-ytdlp.ps1
 ```
 
 脚本自动完成：winget 安装 yt-dlp/ffmpeg/deno → 升级 nightly → 修复用户 PATH → 写全局配置
-→ 生成 `yt` 命令（自动拉起 PO Token 服务器）→ 部署 bgutil 插件与服务器。
+→ 生成 `yt` 命令（自动拉起 PO Token 服务器）→ **放开 CurrentUser 的 PowerShell 执行策略**
+→ 部署 bgutil 插件与服务器。
+
+> Windows 客户端的 PowerShell 执行策略默认是 **Restricted**，会直接拦下 `yt.ps1`；脚本会自动把
+> `CurrentUser` 作用域设为 `RemoteSigned`（不碰系统级、不需要管理员）。若你的机器由组策略强制
+> Restricted，请改用 `yt.cmd <URL>`——`.cmd` 不受执行策略限制。
 
 ### Ubuntu Server 本地版（deno + systemd）
 
@@ -163,6 +168,7 @@ yt -a list.txt                # 批量下载（一行一个 URL）
 | 解析成功但下载数据 403 | 出口 IP 被 googlevideo 封锁（机房 IP 典型） | cookies 为主；换非机房出口为终极方案 |
 | youtube 客户端解析报错 | YouTube 改版 | 先 `yt-dlp --update-to nightly` 再说 |
 | PO Token 服务器起不来 | 依赖不完整 | `rm -rf node_modules` 后重装（脚本已内置正确姿势） |
+| `无法加载文件 yt.ps1 … 在此系统上禁止运行脚本`（`PSSecurityException`） | PowerShell 执行策略为 **Restricted**（Windows 客户端默认值）；PowerShell 里同名 `.ps1` 优先于 `.cmd`，所以 `yt` 命中了脚本文件 | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force`（无需管理员，部署脚本已自动处理）；不想改策略就用 `yt.cmd <URL>` |
 
 403 定性三板斧：**换网络出口试一次**（区分 IP 层）→ **看卡在解析还是下载**（区分 token 层）→
 **`yt-dlp -v <URL>` 看日志**。
@@ -172,7 +178,9 @@ yt -a list.txt                # 批量下载（一行一个 URL）
 - yt-dlp 配置文件必须 **纯 ASCII**（GBK 系统下中文注释直接报错）；
 - Ubuntu 23.04+ 的 PEP 668 不允许 pip 直装 → 脚本用独立 venv；
 - bgutil 依赖安装遇残缺锁文件会装一半 → 脚本先探测再装；npmjs 直连不通 → `--npm-mirror` 走 npmmirror；
-- Windows 下 deno 冷启动超过 bgutil script 模式写死的 15s 超时 → 一律用 HTTP 服务器模式。
+- Windows 下 deno 冷启动超过 bgutil script 模式写死的 15s 超时 → 一律用 HTTP 服务器模式；
+- Windows PowerShell 默认执行策略 Restricted，会拦掉 `yt.ps1` → 部署脚本自动设 `CurrentUser=RemoteSigned`
+  （只影响当前用户，可随时用 `Set-ExecutionPolicy -Scope CurrentUser Undefined` 撤销）。
 
 ## 免责声明
 

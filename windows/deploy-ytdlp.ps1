@@ -9,6 +9,7 @@
       4. 写全局配置  %APPDATA%\yt-dlp\config   （必须纯 ASCII —— GBK 系统下中文注释会导致解析失败）
       5. 写 'yt' 包装命令  %LOCALAPPDATA%\Microsoft\WinGet\Links\yt.ps1
          （按需自动拉起 bgutil PO Token 服务器，监听 4416）
+         并放开 CurrentUser 的 PowerShell 执行策略（默认 Restricted 会直接拦下 yt.ps1）
       6. 部署 bgutil PO Token provider：
          插件 zip -> %APPDATA%\yt-dlp\plugins\
          服务器   -> %USERPROFILE%\bgutil-ytdlp-pot-provider\server\  （deno 依赖）
@@ -118,7 +119,7 @@ Set-Content -Path (Join-Path $CfgDir 'config') -Value $cfg -Encoding Ascii
 Ok "配置已写入（输出目录=$outNorm, cookies=$CookiesBrowser）"
 
 # ---------------------------------------------------------------- 5. yt 包装命令
-Step '5/6 写 yt.ps1 包装命令（按需自动拉起 PO Token 服务器）'
+Step '5/6 写 yt.ps1 包装命令（按需自动拉起 PO Token 服务器）+ 放开执行策略'
 $ytPs1 = @'
 # yt.ps1 - yt-dlp wrapper: auto-start bgutil PO Token server (port 4416) when not listening
 $ErrorActionPreference = 'Continue'
@@ -156,6 +157,25 @@ exit $LASTEXITCODE
 '@
 Set-Content -Path (Join-Path $Links 'yt.ps1') -Value $ytPs1 -Encoding UTF8
 Ok 'yt.ps1 已写入'
+
+# 5b. PowerShell 执行策略：Windows 客户端默认 Restricted，会直接拦下 yt.ps1
+#     （典型报错：PSSecurityException - "因为在此系统上禁止运行脚本"）
+#     只改 CurrentUser 作用域：无需管理员权限，也不影响同一台机器上的其他账户；
+#     RemoteSigned = 本机脚本可直接跑，从网上下载的脚本仍需数字签名。
+$effPolicy = Get-ExecutionPolicy
+if (@('Restricted', 'Undefined') -contains $effPolicy) {
+    try {
+        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+        Ok "执行策略 CurrentUser -> RemoteSigned（原有效策略：$effPolicy，仅当前用户生效）"
+    } catch {
+        # 企业机器上可能由 MachinePolicy / LocalMachine 强制 Restricted，此时脚本层面无解
+        Write-Warning "自动放开执行策略失败：$_"
+        Write-Warning '请手动执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force'
+        Write-Warning '若仍被组策略拒绝，改用：yt.cmd <URL>（.cmd 不受执行策略限制）'
+    }
+} else {
+    Info "PowerShell 执行策略已是 $effPolicy，无需调整"
+}
 
 # ---------------------------------------------------------------- 6. PO Token 层
 if (-not $SkipPotServer) {
